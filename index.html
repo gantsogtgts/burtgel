@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#18181b"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Агуулах"/>
+<link rel="manifest" href="manifest.json"/>
+<title>Агуулахын бүртгэл</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #0f0f11;
+  --surface: #18181b;
+  --surface2: #1f1f23;
+  --surface3: #27272b;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f4f4f5;
+  --text2: #a1a1aa;
+  --text3: #71717a;
+  --accent: #6366f1;
+  --accent-dim: rgba(99,102,241,0.15);
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column;max-width:520px;margin:0 auto;}
+
+/* TOPBAR */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.topbar-title{font-size:16px;font-weight:600;letter-spacing:-0.3px;}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.sync-btn{
+  font-size:12px;font-weight:500;font-family:var(--font);
+  background:var(--accent-dim);color:var(--accent);
+  border:1px solid rgba(99,102,241,0.3);
+  border-radius:20px;padding:6px 12px;cursor:pointer;
+  display:flex;align-items:center;gap:5px;
+  transition:opacity .15s;
+}
+.sync-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.count-pill{
+  font-size:12px;font-weight:600;
+  background:var(--surface3);color:var(--text2);
+  border-radius:20px;padding:5px 10px;
+}
+
+/* TABS */
+.tabs{
+  display:flex;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;padding:0 12px;
+}
+.tab{
+  flex:1;padding:11px 0;font-size:13px;font-weight:500;
+  color:var(--text3);border-bottom:2px solid transparent;
+  cursor:pointer;text-align:center;transition:all .15s;
+  font-family:var(--font);background:none;border-top:none;border-left:none;border-right:none;
+}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* MAIN SCROLL */
+.main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+
+/* CAMERA PAGE */
+.cam-card{
+  background:var(--surface);border-radius:var(--radius);
+  overflow:hidden;border:1px solid var(--border);margin-bottom:12px;
+}
+.cam-preview{
+  width:100%;aspect-ratio:4/3;background:#000;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.cam-preview video{width:100%;height:100%;object-fit:cover;display:none;}
+.cam-placeholder{text-align:center;color:var(--text3);}
+.cam-placeholder svg{display:block;margin:0 auto 10px;opacity:.3;}
+.cam-placeholder p{font-size:13px;}
+.snap-overlay{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(transparent, rgba(0,0,0,0.75));
+  padding:20px 16px 16px;display:none;
+}
+.snap-btn{
+  width:100%;padding:13px;font-size:15px;font-weight:600;
+  background:white;color:#000;border:none;border-radius:var(--radius-sm);
+  cursor:pointer;font-family:var(--font);
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+/* Viewfinder frame */
+.viewfinder{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-56%);
+  width:72%;aspect-ratio:1/1;
+  pointer-events:none;
+}
+.viewfinder::before,.viewfinder::after,
+.vf-br::before,.vf-br::after{
+  content:'';position:absolute;width:22px;height:22px;
+  border-color:rgba(255,255,255,0.9);border-style:solid;
+}
+.viewfinder::before{top:0;left:0;border-width:2.5px 0 0 2.5px;border-radius:3px 0 0 0;}
+.viewfinder::after{top:0;right:0;border-width:2.5px 2.5px 0 0;border-radius:0 3px 0 0;}
+.vf-br::before{bottom:0;left:0;border-width:0 0 2.5px 2.5px;border-radius:0 0 0 3px;}
+.vf-br::after{bottom:0;right:0;border-width:0 2.5px 2.5px 0;border-radius:0 0 3px 0;}
+/* center crosshair */
+.vf-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:16px;height:16px;pointer-events:none;
+}
+.vf-center::before,.vf-center::after{
+  content:'';position:absolute;background:rgba(255,255,255,0.6);border-radius:1px;
+}
+.vf-center::before{width:100%;height:1.5px;top:50%;transform:translateY(-50%);}
+.vf-center::after{height:100%;width:1.5px;left:50%;transform:translateX(-50%);}
+.cam-controls{padding:12px;display:flex;gap:8px;}
+.btn{
+  flex:1;padding:11px;font-size:13px;font-weight:500;
+  border-radius:var(--radius-sm);cursor:pointer;border:none;
+  font-family:var(--font);display:flex;align-items:center;
+  justify-content:center;gap:6px;transition:opacity .15s,transform .1s;
+}
+.btn:active{transform:scale(0.97);}
+.btn-primary{background:var(--accent);color:white;}
+.btn-secondary{background:var(--surface3);color:var(--text2);border:1px solid var(--border2);}
+.btn-success{background:var(--green);color:#000;}
+.btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+.btn:disabled{opacity:0.3;cursor:not-allowed;}
+
+/* STATUS */
+.status{
+  font-size:13px;padding:10px 13px;border-radius:var(--radius-sm);
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;
+  line-height:1.4;
+}
+.status.info{background:var(--accent-dim);color:#818cf8;}
+.status.ok{background:var(--green-dim);color:var(--green);}
+.status.err{background:var(--red-dim);color:var(--red);}
+.status.warn{background:var(--amber-dim);color:var(--amber);}
+.status.loading{background:var(--accent-dim);color:#818cf8;}
+
+/* FORM */
+.form-card{
+  background:var(--surface);border-radius:var(--radius);
+  border:1px solid var(--border);padding:14px;margin-bottom:12px;
+  display:none;
+}
+.form-card.visible{display:block;}
+.form-header{
+  font-size:12px;font-weight:600;margin-bottom:14px;
+  display:flex;align-items:center;gap:6px;
+}
+.form-header.add{color:var(--green);}
+.form-header.edit{color:var(--amber);}
+.field{margin-bottom:12px;}
+.field:last-of-type{margin-bottom:0;}
+.field label{
+  font-size:11px;font-weight:500;color:var(--text3);
+  display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;
+}
+.field input,.field textarea,.field select{
+  width:100%;background:var(--surface3);
+  border:1px solid var(--border2);border-radius:var(--radius-sm);
+  padding:10px 12px;font-size:14px;font-family:var(--font);
+  color:var(--text);outline:none;transition:border-color .15s;
+  -webkit-appearance:none;
+}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);}
+.field textarea{resize:vertical;min-height:70px;line-height:1.5;}
+.field select option{background:var(--surface2);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.thumb-wrap{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px;}
+.thumb-wrap img{
+  width:72px;height:72px;object-fit:cover;
+  border-radius:var(--radius-sm);flex-shrink:0;
+  border:1px solid var(--border2);display:none;
+}
+.thumb-wrap .fields{flex:1;}
+.form-btns{display:flex;gap:8px;margin-top:14px;}
+
+/* LIST PAGE */
+.search-wrap{position:relative;margin-bottom:12px;}
+.search-wrap input{
+  width:100%;background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:10px 12px 10px 38px;
+  font-size:14px;font-family:var(--font);color:var(--text);outline:none;
+}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;}
+.filter-row{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px;}
+.filter-row::-webkit-scrollbar{display:none;}
+.filter-chip{
+  flex-shrink:0;font-size:12px;font-weight:500;padding:6px 12px;
+  border-radius:20px;cursor:pointer;border:1px solid var(--border2);
+  background:var(--surface2);color:var(--text2);font-family:var(--font);
+  white-space:nowrap;transition:all .1s;
+}
+.filter-chip.active{background:var(--accent-dim);color:var(--accent);border-color:rgba(99,102,241,0.3);}
+.sort-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sort-label{font-size:12px;color:var(--text3);}
+.sort-select{
+  font-size:12px;background:var(--surface2);color:var(--text2);
+  border:1px solid var(--border);border-radius:6px;
+  padding:5px 8px;font-family:var(--font);outline:none;cursor:pointer;
+}
+.item-card{
+  background:var(--surface);border-radius:var(--radius);
+  border:1px solid var(--border);padding:12px;margin-bottom:8px;
+  display:flex;gap:11px;align-items:flex-start;
+}
+.item-img{
+  width:52px;height:52px;object-fit:cover;
+  border-radius:var(--radius-sm);flex-shrink:0;
+  background:var(--surface3);display:flex;align-items:center;
+  justify-content:center;color:var(--text3);font-size:20px;
+  border:1px solid var(--border);overflow:hidden;
+}
+.item-img img{width:100%;height:100%;object-fit:cover;}
+.item-body{flex:1;min-width:0;}
+.item-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;}
+.item-meta{font-size:11px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.item-meta span{display:flex;align-items:center;gap:3px;}
+.item-tags{display:flex;gap:5px;flex-wrap:wrap;}
+.tag{
+  font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;
+  background:var(--surface3);color:var(--text2);border:1px solid var(--border);
+}
+.tag.loc{background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);}
+.tag.cat{background:rgba(34,197,94,0.1);color:var(--green);border-color:rgba(34,197,94,0.2);}
+.item-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
+.icon-btn{
+  width:32px;height:32px;border:none;border-radius:var(--radius-sm);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;
+  transition:transform .1s;font-family:var(--font);
+}
+.icon-btn:active{transform:scale(0.9);}
+.icon-btn.edit{background:var(--amber-dim);color:var(--amber);}
+.icon-btn.del{background:var(--red-dim);color:var(--red);}
+.empty-state{
+  text-align:center;padding:50px 20px;color:var(--text3);
+}
+.empty-state svg{display:block;margin:0 auto 12px;opacity:.2;}
+.empty-state p{font-size:14px;}
+
+/* EXPORT PAGE */
+.export-card{
+  background:var(--surface);border-radius:var(--radius);
+  border:1px solid var(--border);padding:16px;margin-bottom:12px;
+}
+.export-title{font-size:14px;font-weight:600;margin-bottom:4px;}
+.export-desc{font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.stat-box{
+  background:var(--surface3);border-radius:var(--radius-sm);
+  padding:12px;text-align:center;border:1px solid var(--border);
+}
+.stat-num{font-size:22px;font-weight:700;color:var(--accent);}
+.stat-lbl{font-size:11px;color:var(--text3);margin-top:2px;}
+.export-btn-big{
+  width:100%;padding:14px;font-size:14px;font-weight:600;
+  border-radius:var(--radius-sm);cursor:pointer;border:none;
+  font-family:var(--font);display:flex;align-items:center;
+  justify-content:center;gap:8px;transition:opacity .15s;margin-bottom:8px;
+}
+.export-btn-big:disabled{opacity:0.3;cursor:not-allowed;}
+.export-btn-big.primary{background:var(--accent);color:white;}
+.export-btn-big.secondary{background:var(--surface3);color:var(--text);border:1px solid var(--border2);}
+
+/* SETTINGS PAGE */
+.settings-section{margin-bottom:20px;}
+.settings-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;}
+.setting-row{
+  background:var(--surface);border-radius:var(--radius-sm);
+  border:1px solid var(--border);padding:13px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:6px;
+}
+.setting-label{font-size:14px;}
+.setting-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.setting-input{
+  background:var(--surface3);border:1px solid var(--border2);
+  border-radius:6px;padding:7px 10px;font-size:13px;
+  font-family:var(--font);color:var(--text);outline:none;
+  width:220px;
+}
+.setting-input:focus{border-color:var(--accent);}
+.connection-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--text3);
+  display:inline-block;margin-right:6px;
+}
+.connection-dot.ok{background:var(--green);}
+.connection-dot.err{background:var(--red);}
+
+/* LOADING SPINNER */
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{
+  width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);
+  border-top-color:white;border-radius:50%;
+  animation:spin .7s linear infinite;display:inline-block;flex-shrink:0;
+}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#27272b;color:var(--text);font-size:13px;font-weight:500;
+  padding:10px 18px;border-radius:var(--radius);border:1px solid var(--border2);
+  opacity:0;transition:all .25s;z-index:100;white-space:nowrap;max-width:90vw;
+  text-overflow:ellipsis;overflow:hidden;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <span class="topbar-title">📦 Агуулах</span>
+  <div class="topbar-right">
+    <span class="count-pill" id="topCount">0</span>
+    <button class="sync-btn" id="syncBtn" onclick="syncToGoogle()" disabled>
+      <span id="syncIcon">☁</span> Синк
+    </button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('cam')">＋ Орлого</button>
+  <button class="tab" onclick="switchTab('zarlag')">－ Зарлага</button>
+  <button class="tab" onclick="switchTab('list')">📋 Жагсаалт</button>
+  <button class="tab" onclick="switchTab('export')">⬇ Гаргах</button>
+  <button class="tab" onclick="switchTab('settings')">⚙</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ═══════════════ CAMERA PAGE ═══════════════ -->
+  <div class="page active" id="page-cam">
+
+    <div class="cam-card">
+      <div class="cam-preview" id="camPreview">
+        <div class="cam-placeholder" id="camPlaceholder">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>Камер нээгээд бараагаа зурагт авна уу</p>
+        </div>
+        <video id="vid" autoplay playsinline></video>
+        <div class="snap-overlay" id="snapOverlay">
+          <button class="snap-btn" onclick="takeSnap()">⬤ &nbsp;Зураг авах</button>
+        </div>
+        <div class="viewfinder" id="vf1" style="display:none;"><div class="vf-br"></div><div class="vf-center"></div></div>
+      </div>
+      <canvas id="cnv" style="display:none"></canvas>
+      <div class="cam-controls">
+        <button class="btn btn-secondary" id="startCamBtn" onclick="toggleCamera()">📷 Камер нээх</button>
+        <button class="btn btn-secondary" id="uploadBtn" onclick="document.getElementById('fileInput').click()">🖼 Файлаас</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)"/>
+      </div>
+    </div>
+
+    <div class="status info" id="statusBox">📌 Камер нээгээд эсвэл галерейгаас зураг сонгоно уу</div>
+
+    <!-- ADD FORM -->
+    <div class="form-card" id="addForm">
+      <div class="form-header add">✦ Шинэ бараа нэмэх</div>
+      <div class="thumb-wrap">
+        <img id="addThumb" alt="зураг"/>
+        <div class="fields">
+          <div class="field">
+            <label>Барааны нэр *</label>
+            <input type="text" id="iName" placeholder="нэр оруулна уу..."/>
+          </div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Тоо ширхэг *</label>
+          <input type="number" id="iQty" value="1" min="0.01" step="any"/>
+        </div>
+        <div class="field">
+          <label>Нэгж</label>
+          <input type="text" id="iUnit" placeholder="ш, кг, л, м..."/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Байршил</label>
+        <input type="text" id="iLocation" placeholder="жнэ: Агуулах А, 3-р тавиур..."/>
+      </div>
+      <div class="field">
+        <label>Зориулалт / ангилал</label>
+        <input type="text" id="iPurpose" placeholder="жнэ: Цахилгааны хэрэгсэл..."/>
+      </div>
+      <div class="field">
+        <label>Тэмдэглэл</label>
+        <input type="text" id="iNote" placeholder="нэмэлт мэдээлэл..."/>
+      </div>
+      <div class="form-btns">
+        <button class="btn btn-secondary" onclick="cancelAdd()">✕ Цуцлах</button>
+        <button class="btn btn-success" onclick="addItem()">＋ Нэмэх</button>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ═══════════════ ZARLAG PAGE ═══════════════ -->
+  <div class="page" id="page-zarlag">
+
+    <div class="cam-card">
+      <div class="cam-preview" id="zCamPreview">
+        <div class="cam-placeholder" id="zCamPlaceholder">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>Зарлага гаргах барааны зургийг авна уу</p>
+        </div>
+        <video id="zVid" autoplay playsinline></video>
+        <div class="snap-overlay" id="zSnapOverlay">
+          <button class="snap-btn" onclick="zTakeSnap()">&#9899; &nbsp;Зураг авах</button>
+        </div>
+        <div class="viewfinder" id="vf2" style="display:none;"><div class="vf-br"></div><div class="vf-center"></div></div>
+      </div>
+      <canvas id="zCnv" style="display:none"></canvas>
+      <div class="cam-controls">
+        <button class="btn btn-secondary" id="zStartCamBtn" onclick="zToggleCamera()">&#128247; Камер нээх</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('zFileInput').click()">&#128444; Файлаас</button>
+        <input type="file" id="zFileInput" accept="image/*" style="display:none" onchange="zHandleFile(event)"/>
+      </div>
+    </div>
+
+    <div class="status info" id="zStatus">&#128204; Зарлага гаргах барааны зургийг авна уу</div>
+
+    <div class="form-card" id="zMatchBox">
+      <div class="form-header" style="color:var(--red);">&#8722; Зарлага гаргах</div>
+
+      <div id="zMatchedItem" style="display:none;">
+        <div style="background:var(--surface3);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px;border:1px solid var(--border2);display:flex;gap:12px;align-items:center;">
+          <img id="zMatchThumb" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0;" alt=""/>
+          <div style="flex:1;min-width:0;">
+            <div id="zMatchName" style="font-size:15px;font-weight:700;margin-bottom:4px;"></div>
+            <div id="zMatchMeta" style="font-size:12px;color:var(--text3);"></div>
+            <div id="zMatchStock" style="font-size:13px;font-weight:600;margin-top:4px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="zNotFound" style="display:none;margin-bottom:14px;">
+        <div class="status warn" style="margin-bottom:10px;">&#9888; Таньсан бараа олдсонгүй - гараар сонгоно уу</div>
+        <div class="field">
+          <label>Бараа хайх / сонгох</label>
+          <input type="text" id="zSearchInput" placeholder="нэрээр хайх..." oninput="zFilterItems()"/>
+        </div>
+        <div id="zItemPicker" style="max-height:200px;overflow-y:auto;margin-top:6px;"></div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Гаргах тоо *</label>
+          <input type="number" id="zQty" value="1" min="0.01" step="any"/>
+        </div>
+        <div class="field">
+          <label>Нэгж</label>
+          <input type="text" id="zUnit" placeholder="ш, кг..."/>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Хэнд өгсөн</label>
+          <input type="text" id="zTo" placeholder="жнэ: Д.Болд, 1-р баг..."/>
+        </div>
+        <div class="field">
+          <label>Хаанд ашигласан</label>
+          <input type="text" id="zWhere" placeholder="жнэ: Барилга, Цех..."/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Тэмдэглэл</label>
+        <input type="text" id="zNote" placeholder="нэмэлт мэдээлэл..."/>
+      </div>
+      <div class="form-btns">
+        <button class="btn btn-secondary" onclick="cancelZarlag()">&#10005; Цуцлах</button>
+        <button class="btn btn-danger" id="zConfirmBtn" onclick="confirmZarlag()">&#8722; Зарлага гаргах</button>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <strong style="font-size:14px;">Зарлагын түүх</strong>
+      <span class="badge" id="zHistoryCount" style="background:var(--red-dim);color:var(--red);">0</span>
+    </div>
+    <div id="zHistoryList"><div class="empty-state" style="padding:24px;"><p>Одоогоор зарлага байхгүй</p></div></div>
+
+  </div>
+
+  <!-- ═══════════════ LIST PAGE ═══════════════ -->
+  <div class="page" id="page-list">
+
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Нэр, байршил, зориулалтаар хайх..." oninput="renderList()"/>
+    </div>
+
+    <div class="filter-row" id="filterRow">
+      <button class="filter-chip active" onclick="setFilter('all', this)">Бүгд</button>
+    </div>
+
+    <div class="sort-row">
+      <span class="sort-label" id="listCountLabel">0 бараа</span>
+      <select class="sort-select" onchange="renderList()">
+        <option value="newest">Шинэ эхэнд</option>
+        <option value="oldest">Хуучин эхэнд</option>
+        <option value="name">Нэрээр</option>
+        <option value="qty-desc">Тоо (их→бага)</option>
+        <option value="qty-asc">Тоо (бага→их)</option>
+      </select>
+    </div>
+
+    <div id="itemList"></div>
+
+    <!-- EDIT FORM inside list page -->
+    <div class="form-card" id="editForm">
+      <div class="form-header edit">✏ Мэдээлэл засах</div>
+      <div class="thumb-wrap">
+        <img id="editThumb" alt="зураг"/>
+        <div class="fields">
+          <div class="field">
+            <label>Барааны нэр *</label>
+            <input type="text" id="eName" placeholder="нэр..."/>
+          </div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Тоо ширхэг *</label>
+          <input type="number" id="eQty" min="0.01" step="any"/>
+        </div>
+        <div class="field">
+          <label>Нэгж</label>
+          <input type="text" id="eUnit"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Байршил</label>
+        <input type="text" id="eLocation"/>
+      </div>
+      <div class="field">
+        <label>Зориулалт / ангилал</label>
+        <input type="text" id="ePurpose"/>
+      </div>
+      <div class="field">
+        <label>Тэмдэглэл</label>
+        <input type="text" id="eNote"/>
+      </div>
+      <div class="form-btns">
+        <button class="btn btn-secondary" onclick="cancelEdit()">✕ Болих</button>
+        <button class="btn btn-primary" onclick="saveEdit()">💾 Хадгалах</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ EXPORT PAGE ═══════════════ -->
+  <div class="page" id="page-export">
+
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-num" id="statTotal">0</div>
+        <div class="stat-lbl">Нийт бараа</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statLocs">0</div>
+        <div class="stat-lbl">Байршил</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statCats">0</div>
+        <div class="stat-lbl">Ангилал</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statSynced">0</div>
+        <div class="stat-lbl">Синкгүй</div>
+      </div>
+    </div>
+
+    <div class="export-card">
+      <div class="export-title">📊 Excel (.xlsx)</div>
+      <div class="export-desc">Нэр, тоо, байршил, зориулалт, зургийн URL бүхий Excel файл татна. Зургийн баганад Drive URL байна.</div>
+      <button class="export-btn-big primary" id="xlsxBtn" onclick="exportXLSX()">⬇ Excel татах</button>
+    </div>
+
+    <div class="export-card">
+      <div class="export-title">🌐 HTML тайлан</div>
+      <div class="export-desc">Зурагтай харагдацтай HTML тайлан. Хэвлэхэд тохиромжтой.</div>
+      <button class="export-btn-big secondary" onclick="exportHTML()">⬇ HTML татах</button>
+    </div>
+
+    <div class="export-card">
+      <div class="export-title">☁ Google Sheets синк</div>
+      <div class="export-desc">Тохиргоо хэсэгт Google API тохируулсны дараа шинэ бараануудыг Sheets-д шилжүүлнэ. Зургийн Drive URL-г Sheets-д =IMAGE() томъёогоор харуулна.</div>
+      <button class="export-btn-big primary" id="syncBtn2" onclick="syncToGoogle()" style="background:var(--surface3);border:1px solid var(--border2);color:var(--text);">☁ Sheets-д синк хийх</button>
+    </div>
+
+    <div class="export-card">
+      <div class="export-title">🗑 Өгөгдөл цэвэрлэх</div>
+      <div class="export-desc">Бүх бараа устах тул татаж авсны дараа хийнэ үү.</div>
+      <button class="export-btn-big" onclick="clearAllData()" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.2);">🗑 Бүгдийг устгах</button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ SETTINGS PAGE ═══════════════ -->
+  <div class="page" id="page-settings">
+
+    <div class="settings-section">
+      <div class="settings-title">Google холболт</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">
+            <span class="connection-dot" id="gLoginDot"></span>
+            Google бүртгэл
+          </div>
+          <div class="setting-sub" id="gLoginStatus">Нэвтрээгүй</div>
+        </div>
+        <button class="btn btn-primary" id="gLoginBtn" onclick="googleLogin()" style="flex:none;padding:8px 14px;font-size:13px;">Нэвтрэх</button>
+      </div>
+
+      <div class="setting-row">
+        <div style="flex:1;">
+          <div class="setting-label">Client ID</div>
+          <div class="setting-sub">Google Cloud Console → OAuth 2.0</div>
+        </div>
+      </div>
+      <div style="padding:0 0 8px;">
+        <input class="setting-input" id="clientIdInput" style="width:100%;" placeholder="xxxxx.apps.googleusercontent.com" oninput="saveSettings()"/>
+      </div>
+
+      <div class="setting-row">
+        <div style="flex:1;">
+          <div class="setting-label">Spreadsheet ID</div>
+          <div class="setting-sub">Sheets URL дахь /d/ЭНД/edit</div>
+        </div>
+      </div>
+      <div style="padding:0 0 8px;">
+        <input class="setting-input" id="sheetIdInput" style="width:100%;" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" oninput="saveSettings()"/>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Апп мэдээлэл</div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Хувилбар</div>
+          <div class="setting-sub">Агуулахын бүртгэл v1.0</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">AI Proxy URL</div>
+          <div class="setting-sub">Cloudflare Worker хаяг (CORS шийдэл)</div>
+        </div>
+      </div>
+      <div style="padding:0 0 8px;">
+        <input class="setting-input" id="proxyUrlInput" style="width:100%;" placeholder="https://inventory-proxy.ТANY_НЭР.workers.dev" oninput="saveSettings()"/>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Офлайн горим</div>
+          <div class="setting-sub">IndexedDB — бүх өгөгдөл утсанд хадгалагдана</div>
+        </div>
+        <span style="font-size:12px;color:var(--green);">✓ Идэвхтэй</span>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label" id="dbSizeLabel">Хадгалсан өгөгдөл</div>
+          <div class="setting-sub" id="dbSizeSub">...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+// Cloudflare Worker proxy — CORS шийдэл
+// Тохиргоо хэсэгт Worker URL оруулна
+let PROXY_URL = localStorage.getItem('proxyUrl') || '';
+let items = [];
+let stream = null;
+let currentImg = '';
+let editingId = null;
+let activeFilter = 'all';
+let accessToken = null;
+let db = null;
+
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
+const DB_NAME = 'inventory_db';
+const DB_VERSION = 1;
+const STORE = 'items';
+
+// ─────────────────────────────────────────────
+// INDEXEDDB
+// ─────────────────────────────────────────────
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        const store = d.createObjectStore(STORE, { keyPath: 'id' });
+        store.createIndex('location', 'location', { unique: false });
+        store.createIndex('purpose', 'purpose', { unique: false });
+        store.createIndex('synced', 'synced', { unique: false });
+      }
+      if (!d.objectStoreNames.contains('transactions')) {
+        const tx2 = d.createObjectStore('transactions', { keyPath: 'id' });
+        tx2.createIndex('itemId', 'itemId', { unique: false });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAll() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbPut(item) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).put(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbDelete(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbClear() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadFromDB() {
+  items = await dbGetAll();
+  items.sort((a, b) => b.id - a.id);
+  updateUI();
+  updateDBSize();
+}
+
+// ─────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────
+function saveSettings() {
+  localStorage.setItem('clientId', document.getElementById('clientIdInput').value);
+  localStorage.setItem('sheetId', document.getElementById('sheetIdInput').value);
+  const pu = document.getElementById('proxyUrlInput').value.trim();
+  localStorage.setItem('proxyUrl', pu);
+  PROXY_URL = pu;
+}
+
+function loadSettings() {
+  document.getElementById('clientIdInput').value = localStorage.getItem('clientId') || '';
+  document.getElementById('sheetIdInput').value = localStorage.getItem('sheetId') || '';
+  document.getElementById('proxyUrlInput').value = localStorage.getItem('proxyUrl') || '';
+}
+
+function getClientId() { return (document.getElementById('clientIdInput').value || localStorage.getItem('clientId') || '').trim(); }
+function getSheetId() { return (document.getElementById('sheetIdInput').value || localStorage.getItem('sheetId') || '').trim(); }
+
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const tabs = { cam: 0, zarlag: 1, list: 2, export: 3, settings: 4 };
+  document.querySelectorAll('.tab')[tabs[name]].classList.add('active');
+  if (name === 'list') renderList();
+  if (name === 'export') updateStats();
+  if (name === 'settings') updateDBSize();
+  if (name === 'zarlag') renderZarlagHistory();
+}
+
+// ─────────────────────────────────────────────
+// CAMERA
+// ─────────────────────────────────────────────
+async function toggleCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    document.getElementById('vid').style.display = 'none';
+    document.getElementById('camPlaceholder').style.display = 'block';
+    document.getElementById('snapOverlay').style.display = 'none';
+    document.getElementById('vf1').style.display = 'none';
+    document.getElementById('startCamBtn').textContent = '📷 Камер нээх';
+    setStatus('📌 Камер хаагдлаа', 'info');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }
+    });
+    const vid = document.getElementById('vid');
+    vid.srcObject = stream;
+    vid.style.display = 'block';
+    document.getElementById('camPlaceholder').style.display = 'none';
+    document.getElementById('snapOverlay').style.display = 'block';
+    document.getElementById('vf1').style.display = 'block';
+    document.getElementById('startCamBtn').textContent = '■ Зогсоох';
+    setStatus('✅ Камер бэлэн', 'ok');
+  } catch (e) {
+    setStatus('❌ Камер зөвшөөрөл өгөөгүй — хаягийн мөрний цоожоор зөвшөөрнө үү', 'err');
+  }
+}
+
+function takeSnap() {
+  const vid = document.getElementById('vid');
+  const cnv = document.getElementById('cnv');
+  cnv.width = vid.videoWidth;
+  cnv.height = vid.videoHeight;
+  cnv.getContext('2d').drawImage(vid, 0, 0);
+  currentImg = cnv.toDataURL('image/jpeg', 0.80);
+  showAddForm(currentImg);
+  analyzeImage(currentImg);
+}
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentImg = ev.target.result;
+    showAddForm(currentImg);
+    analyzeImage(currentImg);
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function showAddForm(imgSrc) {
+  const thumb = document.getElementById('addThumb');
+  thumb.src = imgSrc;
+  thumb.style.display = 'block';
+  document.getElementById('addForm').classList.add('visible');
+  document.getElementById('addForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─────────────────────────────────────────────
+// AI ANALYSIS
+// ─────────────────────────────────────────────
+async function analyzeImage(dataUrl) {
+  setStatus('🤖 AI шинжилж байна...', 'loading');
+  const b64 = dataUrl.split(',')[1];
+  try {
+    const apiEndpoint = PROXY_URL || 'https://api.anthropic.com/v1/messages';
+    const r = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: 'Энэ зурган дээрх бараа юу болохыг тань. Зөвхөн JSON форматаар хариул, өөр текст огт бүү нэм:\n{"name":"монгол нэр","unit":"ш эсвэл кг эсвэл л","purpose":"ерөнхий ангилал","note":"богино тайлбар"}' }
+        ]}]
+      })
+    });
+    const d = await r.json();
+    const txt = (d.content || []).map(c => c.text || '').join('');
+    let p = {};
+    try { p = JSON.parse(txt.replace(/```json|```/g, '').trim()); } catch (e) { p = { name: '', unit: 'ш', purpose: '', note: '' }; }
+    document.getElementById('iName').value = p.name || '';
+    document.getElementById('iUnit').value = p.unit || 'ш';
+    document.getElementById('iPurpose').value = p.purpose || '';
+    document.getElementById('iNote').value = p.note || '';
+    setStatus('✅ AI таньлаа — засаад нэмнэ үү', 'ok');
+  } catch (e) {
+    document.getElementById('iUnit').value = 'ш';
+    if (!PROXY_URL) {
+      setStatus('⚠ Тохиргоо → AI Proxy URL оруулаагүй — гараар бөглөнө үү', 'warn');
+    } else {
+      setStatus('⚠ AI холбогдсонгүй — гараар оруулна уу', 'warn');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// ADD / EDIT ITEMS
+// ─────────────────────────────────────────────
+async function addItem() {
+  const name = document.getElementById('iName').value.trim();
+  const qty = parseFloat(document.getElementById('iQty').value) || 1;
+  const unit = document.getElementById('iUnit').value.trim() || 'ш';
+  const location = document.getElementById('iLocation').value.trim();
+  const purpose = document.getElementById('iPurpose').value.trim();
+  const note = document.getElementById('iNote').value.trim();
+  if (!name) { setStatus('❌ Барааны нэр оруулна уу', 'err'); return; }
+
+  const item = {
+    id: Date.now(),
+    name, qty, unit, location, purpose, note,
+    img: currentImg,
+    driveUrl: '',
+    synced: false,
+    time: new Date().toLocaleString('mn-MN')
+  };
+
+  // Ижил нэртэй бараа байвал анхааруулах
+  const existing = items.find(i => i.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    if (!confirm(`"${name}" нэртэй бараа аль хэдийн байна (${existing.qty} ${existing.unit}). Шинээр нэмэх үү?`)) return;
+  }
+
+  items.unshift(item);
+  await dbPut(item);
+
+  cancelAdd();
+  // Камерыг зогсоох
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('vid').style.display = 'none';
+  document.getElementById('camPlaceholder').style.display = 'block';
+  document.getElementById('snapOverlay').style.display = 'none';
+  document.getElementById('vf1').style.display = 'none';
+  document.getElementById('startCamBtn').textContent = '📷 Камер нээх';
+  updateUI();
+  toast('✅ ' + name + ' нэмэгдлээ');
+  // Жагсаалт руу шилжих
+  switchTab('list');
+}
+
+function cancelAdd() {
+  document.getElementById('addForm').classList.remove('visible');
+  document.getElementById('addThumb').style.display = 'none';
+  currentImg = '';
+  ['iName','iQty','iUnit','iLocation','iPurpose','iNote'].forEach(id => {
+    document.getElementById(id).value = id === 'iQty' ? '1' : '';
+  });
+}
+
+window.startEdit = function(id) {
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  editingId = id;
+  document.getElementById('eName').value = it.name;
+  document.getElementById('eQty').value = it.qty;
+  document.getElementById('eUnit').value = it.unit;
+  document.getElementById('eLocation').value = it.location || '';
+  document.getElementById('ePurpose').value = it.purpose || '';
+  document.getElementById('eNote').value = it.note || '';
+  const et = document.getElementById('editThumb');
+  if (it.img) { et.src = it.img; et.style.display = 'block'; } else { et.style.display = 'none'; }
+  const ef = document.getElementById('editForm');
+  ef.classList.add('visible');
+  ef.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+async function saveEdit() {
+  const name = document.getElementById('eName').value.trim();
+  const qty = parseFloat(document.getElementById('eQty').value) || 1;
+  const unit = document.getElementById('eUnit').value.trim() || 'ш';
+  const location = document.getElementById('eLocation').value.trim();
+  const purpose = document.getElementById('ePurpose').value.trim();
+  const note = document.getElementById('eNote').value.trim();
+  if (!name) { toast('❌ Нэр оруулна уу'); return; }
+
+  const idx = items.findIndex(i => i.id === editingId);
+  if (idx > -1) {
+    items[idx] = { ...items[idx], name, qty, unit, location, purpose, note, synced: false };
+    await dbPut(items[idx]);
+  }
+  cancelEdit();
+  renderList();
+  updateTopCount();
+  toast('✅ Хадгалагдлаа');
+}
+
+function cancelEdit() {
+  document.getElementById('editForm').classList.remove('visible');
+  editingId = null;
+}
+
+window.removeItem = async function(id) {
+  if (!confirm('Устгах уу?')) return;
+  items = items.filter(i => i.id !== id);
+  await dbDelete(id);
+  renderList();
+  updateTopCount();
+  toast('🗑 Устгагдлаа');
+};
+
+// ─────────────────────────────────────────────
+// RENDER LIST
+// ─────────────────────────────────────────────
+function setFilter(val, el) {
+  activeFilter = val;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+function buildFilters() {
+  const locations = [...new Set(items.map(i => i.location).filter(Boolean))];
+  const row = document.getElementById('filterRow');
+  row.innerHTML = '<button class="filter-chip' + (activeFilter === 'all' ? ' active' : '') + '" onclick="setFilter(\'all\', this)">Бүгд</button>';
+  locations.forEach(loc => {
+    const active = activeFilter === loc ? ' active' : '';
+    row.innerHTML += `<button class="filter-chip${active}" onclick="setFilter('${esc(loc)}', this)">${esc(loc)}</button>`;
+  });
+}
+
+function renderList() {
+  buildFilters();
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const sortVal = document.querySelector('.sort-select') ? document.querySelector('.sort-select').value : 'newest';
+
+  let filtered = items.filter(it => {
+    const matchFilter = activeFilter === 'all' || it.location === activeFilter;
+    const matchSearch = !search || [it.name, it.location, it.purpose, it.note].some(v => (v || '').toLowerCase().includes(search));
+    return matchFilter && matchSearch;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (sortVal === 'newest') return b.id - a.id;
+    if (sortVal === 'oldest') return a.id - b.id;
+    if (sortVal === 'name') return (a.name || '').localeCompare(b.name || '');
+    if (sortVal === 'qty-desc') return b.qty - a.qty;
+    if (sortVal === 'qty-asc') return a.qty - b.qty;
+    return 0;
+  });
+
+  document.getElementById('listCountLabel').textContent = filtered.length + ' бараа';
+
+  if (!filtered.length) {
+    document.getElementById('itemList').innerHTML = `
+      <div class="empty-state">
+        <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <p>${search ? 'Хайлтын үр дүн олдсонгүй' : 'Одоогоор бараа байхгүй'}</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('itemList').innerHTML = filtered.map(it => `
+    <div class="item-card">
+      <div class="item-img">
+        ${it.img ? `<img src="${it.img}" alt=""/>` : '📦'}
+      </div>
+      <div class="item-body">
+        <div class="item-name">${esc(it.name)}</div>
+        <div class="item-meta">
+          <span>📦 ${it.qty} ${esc(it.unit)}</span>
+          ${it.location ? `<span>📍 ${esc(it.location)}</span>` : ''}
+        </div>
+        <div class="item-tags">
+          ${it.location ? `<span class="tag loc">${esc(it.location)}</span>` : ''}
+          ${it.purpose ? `<span class="tag cat">${esc(it.purpose)}</span>` : ''}
+          ${it.note ? `<span class="tag">${esc(it.note)}</span>` : ''}
+          ${it.synced ? '<span class="tag" style="color:var(--green);border-color:rgba(34,197,94,0.2);">☁ синк</span>' : ''}
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="icon-btn edit" onclick="startEdit(${it.id})">✏</button>
+        <button class="icon-btn del" onclick="removeItem(${it.id})">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────────
+// GOOGLE AUTH + DRIVE + SHEETS
+// ─────────────────────────────────────────────
+function googleLogin() {
+  const cid = getClientId();
+  if (!cid) { toast('❌ Эхлээд Client ID оруулна уу'); switchTab('settings'); return; }
+  try {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: cid,
+      scope: SCOPES,
+      callback: resp => {
+        if (resp.access_token) {
+          accessToken = resp.access_token;
+          document.getElementById('gLoginDot').className = 'connection-dot ok';
+          document.getElementById('gLoginStatus').textContent = 'Нэвтэрсэн ✓';
+          document.getElementById('gLoginBtn').textContent = 'Шинэчлэх';
+          document.getElementById('syncBtn').disabled = false;
+          document.getElementById('syncBtn2').style.background = 'var(--accent)';
+          document.getElementById('syncBtn2').style.color = 'white';
+          document.getElementById('syncBtn2').style.border = 'none';
+          toast('✅ Google-т нэвтэрлээ');
+        }
+      }
+    });
+    client.requestAccessToken();
+  } catch (e) {
+    toast('❌ GSI library бэлэн биш. Интернэт холболт шалгана уу.');
+  }
+}
+
+async function uploadImageToDrive(base64DataUrl, fileName) {
+  if (!base64DataUrl) return '';
+  const res = await fetch(base64DataUrl);
+  const blob = await res.blob();
+  const metadata = { name: fileName, mimeType: 'image/jpeg' };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', blob);
+  const uploadRes = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form }
+  );
+  const file = await uploadRes.json();
+  if (!file.id) throw new Error('Drive upload алдаа: ' + JSON.stringify(file));
+  await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' })
+  });
+  return `https://drive.google.com/uc?id=${file.id}`;
+}
+
+async function ensureSheetHeader(sheetId) {
+  const r = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:H1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const d = await r.json();
+  if (!d.values || !d.values[0] || d.values[0][0] !== '№') {
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:H1?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [['№','Зураг','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Огноо']] })
+      }
+    );
+  }
+}
+
+async function syncToGoogle() {
+  if (!accessToken) { toast('❌ Эхлээд Google-т нэвтэрнэ үү'); switchTab('settings'); return; }
+  const sheetId = getSheetId();
+  if (!sheetId) { toast('❌ Spreadsheet ID оруулна уу'); switchTab('settings'); return; }
+
+  const unsynced = items.filter(i => !i.synced);
+  if (!unsynced.length) { toast('✓ Бүх бараа синк хийгдсэн'); return; }
+
+  document.getElementById('syncBtn').disabled = true;
+  document.getElementById('syncBtn').innerHTML = '<span class="spinner"></span> Синк...';
+
+  try {
+    await ensureSheetHeader(sheetId);
+    let done = 0;
+    // Шинэ бараа дээд талд гарахын тулд эхлээд бүгдийг бэлдэж,
+    // дараа нь 2-р мөрт нэг дор insert хийнэ
+    const rows = [];
+    const driveUrls = {};
+    for (const it of unsynced) {
+      setStatus(`⏳ ${done + 1}/${unsynced.length} — "${it.name}" зураг хадгалж байна...`, 'loading');
+      let driveUrl = it.driveUrl;
+      if (!driveUrl && it.img) {
+        driveUrl = await uploadImageToDrive(it.img, `${it.name}_${it.id}.jpg`);
+      }
+      driveUrls[it.id] = driveUrl;
+      rows.push([
+        '',
+        driveUrl ? `=IMAGE("${driveUrl}")` : '',
+        it.name, it.qty, it.unit,
+        it.location || '', it.purpose || '', it.note || '', it.time
+      ]);
+      done++;
+    }
+
+    // Бүх мөрийг 2-р мөрт нэг дор insert хийнэ (дээд талд)
+    setStatus(`⏳ Sheets-д бичиж байна...`, 'loading');
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:I2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: rows })
+      }
+    );
+
+    // №-г дараа нь томъёогоор автоматаар дүүргэх
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:A${rows.length + 1}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: rows.map((_, i) => [`=ROW()-1`]) })
+      }
+    );
+
+    // synced төлөв шинэчлэх
+    for (const it of unsynced) {
+      const idx = items.findIndex(i => i.id === it.id);
+      if (idx > -1) { items[idx].synced = true; items[idx].driveUrl = driveUrls[it.id] || ''; await dbPut(items[idx]); }
+    }
+    setStatus(`✅ ${done} бараа Google Sheets-д синк хийгдлээ`, 'ok');
+    toast(`✅ ${done} бараа синк хийгдлээ`);
+    updateUI();
+  } catch (e) {
+    setStatus('❌ Синк алдаа: ' + e.message, 'err');
+    toast('❌ Синк алдаа');
+  } finally {
+    document.getElementById('syncBtn').disabled = false;
+    document.getElementById('syncBtn').innerHTML = '☁ Синк';
+  }
+}
+
+// ─────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────
+function exportXLSX() {
+  if (!items.length) { toast('Бараа байхгүй'); return; }
+  const wb = XLSX.utils.book_new();
+  const wsData = [['№','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Drive зургийн URL','Огноо']];
+  items.forEach((it, i) => {
+    wsData.push([i+1, it.name, it.qty, it.unit, it.location||'', it.purpose||'', it.note||'', it.driveUrl||'', it.time]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [{wch:4},{wch:28},{wch:8},{wch:7},{wch:20},{wch:22},{wch:22},{wch:40},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Бараа материал');
+  // Stats sheet
+  const locs = [...new Set(items.map(i=>i.location).filter(Boolean))];
+  const cats = [...new Set(items.map(i=>i.purpose).filter(Boolean))];
+  const statsData = [['Үзүүлэлт','Утга'],['Нийт бараа',items.length],['Байршлийн тоо',locs.length],['Ангилалын тоо',cats.length],['Экспортлосон огноо',new Date().toLocaleString('mn-MN')]];
+  const ws2 = XLSX.utils.aoa_to_sheet(statsData);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Тойм');
+  XLSX.writeFile(wb, 'агуулах_бүртгэл_' + new Date().toLocaleDateString('mn-MN').replace(/\//g,'-') + '.xlsx');
+  toast('✅ Excel татагдлаа');
+}
+
+function exportHTML() {
+  if (!items.length) { toast('Бараа байхгүй'); return; }
+  let html = `<!DOCTYPE html><html lang="mn"><head><meta charset="UTF-8"/><title>Агуулахын бүртгэл</title>
+<style>body{font-family:sans-serif;padding:24px;background:#f8fafc;}h1{margin-bottom:4px;}p.sub{color:#64748b;margin-bottom:20px;font-size:13px;}
+table{border-collapse:collapse;width:100%;}th{background:#1e293b;color:#fff;padding:10px 12px;text-align:left;font-size:13px;}
+td{padding:9px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;vertical-align:middle;}tr:nth-child(even){background:#f1f5f9;}
+img{width:64px;height:64px;object-fit:cover;border-radius:6px;}</style></head><body>
+<h1>📦 Агуулахын бүртгэл</h1><p class="sub">${new Date().toLocaleString('mn-MN')} — Нийт ${items.length} бараа</p>
+<table><tr><th>№</th><th>Зураг</th><th>Нэр</th><th>Тоо</th><th>Нэгж</th><th>Байршил</th><th>Зориулалт</th><th>Тэмдэглэл</th></tr>`;
+  items.forEach((it, i) => {
+    const imgTag = it.img ? `<img src="${it.img}" alt=""/>` : '—';
+    html += `<tr><td>${i+1}</td><td>${imgTag}</td><td><strong>${esc(it.name)}</strong></td><td>${it.qty}</td><td>${esc(it.unit)}</td><td>${esc(it.location||'')}</td><td>${esc(it.purpose||'')}</td><td>${esc(it.note||'')}</td></tr>`;
+  });
+  html += `</table></body></html>`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  a.download = 'агуулах_' + new Date().toLocaleDateString('mn-MN').replace(/\//g,'-') + '.html';
+  a.click();
+  toast('✅ HTML татагдлаа');
+}
+
+async function clearAllData() {
+  if (!confirm('Бүх ' + items.length + ' бараа устах болно. Татаж авсны дараа хийнэ үү. Үргэлжлүүлэх үү?')) return;
+  items = [];
+  await dbClear();
+  updateUI();
+  toast('🗑 Бүгд устгагдлаа');
+}
+
+// ─────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────
+function updateUI() {
+  updateTopCount();
+  updateStats();
+  if (document.getElementById('page-list').classList.contains('active')) renderList();
+}
+
+function updateTopCount() {
+  document.getElementById('topCount').textContent = items.length;
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = items.length;
+  document.getElementById('statLocs').textContent = new Set(items.map(i=>i.location).filter(Boolean)).size;
+  document.getElementById('statCats').textContent = new Set(items.map(i=>i.purpose).filter(Boolean)).size;
+  document.getElementById('statSynced').textContent = items.filter(i=>!i.synced).length;
+}
+
+async function updateDBSize() {
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const est = await navigator.storage.estimate();
+      const mb = (est.usage / 1024 / 1024).toFixed(1);
+      document.getElementById('dbSizeSub').textContent = mb + ' MB ашиглагдаж байна';
+    } else {
+      document.getElementById('dbSizeSub').textContent = items.length + ' бараа хадгалагдсан';
+    }
+  } catch(e) {
+    document.getElementById('dbSizeSub').textContent = items.length + ' бараа';
+  }
+}
+
+function setStatus(msg, type = 'info') {
+  const s = document.getElementById('statusBox');
+  s.className = 'status ' + type;
+  s.textContent = msg;
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+// ─────────────────────────────────────────────
+// ZARLAG — CAMERA
+// ─────────────────────────────────────────────
+let zStream = null;
+let zCurrentImg = '';
+let zSelectedItemId = null;
+let transactions = [];
+
+async function zToggleCamera() {
+  if (zStream) {
+    zStream.getTracks().forEach(t => t.stop());
+    zStream = null;
+    document.getElementById('zVid').style.display = 'none';
+    document.getElementById('zCamPlaceholder').style.display = 'block';
+    document.getElementById('zSnapOverlay').style.display = 'none';
+    document.getElementById('vf2').style.display = 'none';
+    document.getElementById('zStartCamBtn').textContent = '📷 Камер нээх';
+    return;
+  }
+  try {
+    zStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }
+    });
+    const vid = document.getElementById('zVid');
+    vid.srcObject = zStream;
+    vid.style.display = 'block';
+    document.getElementById('zCamPlaceholder').style.display = 'none';
+    document.getElementById('zSnapOverlay').style.display = 'block';
+    document.getElementById('vf2').style.display = 'block';
+    document.getElementById('zStartCamBtn').textContent = '■ Зогсоох';
+    zSetStatus('✅ Камер бэлэн', 'ok');
+  } catch (e) {
+    zSetStatus('❌ Камер зөвшөөрөл өгөөгүй', 'err');
+  }
+}
+
+function zTakeSnap() {
+  const vid = document.getElementById('zVid');
+  const cnv = document.getElementById('zCnv');
+  cnv.width = vid.videoWidth; cnv.height = vid.videoHeight;
+  cnv.getContext('2d').drawImage(vid, 0, 0);
+  zCurrentImg = cnv.toDataURL('image/jpeg', 0.80);
+  zMatchImage(zCurrentImg);
+}
+
+function zHandleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { zCurrentImg = ev.target.result; zMatchImage(zCurrentImg); };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+// ─────────────────────────────────────────────
+// ZARLAG — AI MATCH
+// ─────────────────────────────────────────────
+async function zMatchImage(dataUrl) {
+  zSetStatus('🤖 AI бараа таньж байна...', 'loading');
+  document.getElementById('zMatchBox').classList.add('visible');
+  document.getElementById('zMatchedItem').style.display = 'none';
+  document.getElementById('zNotFound').style.display = 'none';
+  zSelectedItemId = null;
+
+  const b64 = dataUrl.split(',')[1];
+
+  // Build item list for AI context
+  if (!items.length) { zShowNotFound(); zSetStatus('⚠ Жагсаалт хоосон — эхлээд орлого хийнэ үү', 'warn'); return; }
+  const itemList = items.map(it => `id:${it.id} нэр:"${it.name}" байршил:"${it.location||''}" үлдэгдэл:${it.qty}${it.unit}`).join('\n');
+
+  try {
+    const apiEndpoint = PROXY_URL || 'https://api.anthropic.com/v1/messages';
+    const r = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text: `Зурагт байгаа бараа доорх жагсаалтын аль нэг барааг таних хичээ. Хамгийн ойролцоо нэртэй барааны ID-г буцаа.\n\nЖагсаалт:\n${itemList}\n\nЗөвхөн JSON хариул: {"matchId": NUMBER_OR_NULL, "confidence": "high/medium/low"}` }
+        ]}]
+      })
+    });
+    const d = await r.json();
+    const txt = (d.content || []).map(c => c.text || '').join('');
+    let p = {};
+    try { p = JSON.parse(txt.replace(/\`\`\`json|\`\`\`/g, '').trim()); } catch(e) {}
+
+    if (p.matchId && items.find(i => i.id === p.matchId)) {
+      zShowMatch(p.matchId, p.confidence);
+    } else {
+      // fallback: try name match
+      zShowNotFound();
+    }
+  } catch(e) {
+    zShowNotFound();
+    if (!PROXY_URL) {
+      zSetStatus('⚠ Тохиргоо → AI Proxy URL оруулаагүй байна', 'warn');
+    } else {
+      zSetStatus('⚠ AI холбогдсонгүй — гараар сонгоно уу', 'warn');
+    }
+  }
+}
+
+function zShowMatch(itemId, confidence) {
+  const it = items.find(i => i.id === itemId);
+  if (!it) { zShowNotFound(); return; }
+  zSelectedItemId = itemId;
+
+  const thumb = document.getElementById('zMatchThumb');
+  if (it.img) { thumb.src = it.img; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
+  document.getElementById('zMatchName').textContent = it.name;
+  document.getElementById('zMatchMeta').textContent = [it.location, it.purpose].filter(Boolean).join(' · ');
+  const stockEl = document.getElementById('zMatchStock');
+  stockEl.textContent = `Үлдэгдэл: ${it.qty} ${it.unit}`;
+  stockEl.style.color = it.qty <= 0 ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('zUnit').value = it.unit;
+  document.getElementById('zMatchedItem').style.display = 'block';
+  document.getElementById('zNotFound').style.display = 'none';
+
+  const conf = confidence === 'high' ? '✅ Таньлаа' : '🟡 Магадгүй таньлаа — шалгана уу';
+  zSetStatus(conf, confidence === 'high' ? 'ok' : 'warn');
+}
+
+function zShowNotFound() {
+  document.getElementById('zMatchedItem').style.display = 'none';
+  document.getElementById('zNotFound').style.display = 'block';
+  zFilterItems();
+}
+
+function zFilterItems() {
+  const q = (document.getElementById('zSearchInput').value || '').toLowerCase();
+  const filtered = items.filter(it =>
+    !q || it.name.toLowerCase().includes(q) || (it.location||'').toLowerCase().includes(q)
+  ).slice(0, 20);
+  const picker = document.getElementById('zItemPicker');
+  if (!filtered.length) { picker.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px;">Олдсонгүй</div>'; return; }
+  picker.innerHTML = filtered.map(it => `
+    <div onclick="zSelectItem(${it.id})" style="
+      padding:10px 12px;border-radius:8px;cursor:pointer;display:flex;
+      align-items:center;gap:10px;border:1px solid ${zSelectedItemId===it.id ? 'var(--accent)' : 'var(--border)'};
+      background:${zSelectedItemId===it.id ? 'var(--accent-dim)' : 'var(--surface3)'};margin-bottom:6px;">
+      ${it.img ? `<img src="${it.img}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : '<div style="width:36px;height:36px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;">📦</div>'}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${esc(it.name)}</div>
+        <div style="font-size:11px;color:var(--text3);">Үлдэгдэл: ${it.qty} ${esc(it.unit)} ${it.location ? '· '+esc(it.location) : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function zSelectItem(id) {
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  zSelectedItemId = id;
+  zShowMatch(id, 'high');
+  document.getElementById('zMatchedItem').style.display = 'block';
+  document.getElementById('zNotFound').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────
+// ZARLAG — CONFIRM
+// ─────────────────────────────────────────────
+async function confirmZarlag() {
+  if (!zSelectedItemId) { toast('❌ Бараа сонгоно уу'); return; }
+  const qty = parseFloat(document.getElementById('zQty').value) || 0;
+  const zTo = document.getElementById('zTo').value.trim();
+  const zWhere = document.getElementById('zWhere').value.trim();
+  const note = document.getElementById('zNote').value.trim();
+  if (!qty || qty <= 0) { toast('❌ Тоо оруулна уу'); return; }
+
+  const idx = items.findIndex(i => i.id === zSelectedItemId);
+  if (idx === -1) { toast('❌ Бараа олдсонгүй'); return; }
+
+  const it = items[idx];
+  if (qty > it.qty) {
+    if (!confirm(`Үлдэгдэл (${it.qty} ${it.unit}) хүрэхгүй байна. Үргэлжлүүлэх үү?`)) return;
+  }
+
+  // Update stock
+  const newQty = Math.max(0, it.qty - qty);
+  items[idx] = { ...it, qty: newQty, synced: false };
+  await dbPut(items[idx]);
+
+  // Save transaction
+  const tx = {
+    id: Date.now(),
+    type: 'zarlag',
+    itemId: zSelectedItemId,
+    itemName: it.name,
+    itemUnit: it.unit,
+    qty: qty,
+    qtyBefore: it.qty,
+    qtyAfter: newQty,
+    to: zTo,
+    where: zWhere,
+    note: note,
+    img: zCurrentImg,
+    time: new Date().toLocaleString('mn-MN')
+  };
+  transactions.unshift(tx);
+  await dbPutTx(tx);
+
+  cancelZarlag();
+  // Камерыг зогсоох
+  if (zStream) { zStream.getTracks().forEach(t => t.stop()); zStream = null; }
+  document.getElementById('zVid').style.display = 'none';
+  document.getElementById('zCamPlaceholder').style.display = 'block';
+  document.getElementById('zSnapOverlay').style.display = 'none';
+  document.getElementById('vf2').style.display = 'none';
+  document.getElementById('zStartCamBtn').textContent = '📷 Камер нээх';
+  renderZarlagHistory();
+  updateUI();
+  toast(`✅ ${it.name} — ${qty}${it.unit} зарлагалав. Үлдэгдэл: ${newQty}${it.unit}`);
+  // Жагсаалт руу шилжих
+  switchTab('list');
+}
+
+function cancelZarlag() {
+  document.getElementById('zMatchBox').classList.remove('visible');
+  document.getElementById('zMatchedItem').style.display = 'none';
+  document.getElementById('zNotFound').style.display = 'none';
+  zCurrentImg = '';
+  zSelectedItemId = null;
+  document.getElementById('zQty').value = '1';
+  document.getElementById('zUnit').value = '';
+  document.getElementById('zTo').value = '';
+  document.getElementById('zWhere').value = '';
+  document.getElementById('zNote').value = '';
+  zSetStatus('📌 Зарлага гаргах барааны зургийг авна уу', 'info');
+}
+
+function zSetStatus(msg, type = 'info') {
+  const s = document.getElementById('zStatus');
+  s.className = 'status ' + type;
+  s.textContent = msg;
+}
+
+// ─────────────────────────────────────────────
+// ZARLAG — HISTORY
+// ─────────────────────────────────────────────
+function renderZarlagHistory() {
+  document.getElementById('zHistoryCount').textContent = transactions.length;
+  if (!transactions.length) {
+    document.getElementById('zHistoryList').innerHTML = '<div class="empty-state" style="padding:24px;"><p>Одоогоор зарлага байхгүй</p></div>';
+    return;
+  }
+  document.getElementById('zHistoryList').innerHTML = transactions.map(tx => `
+    <div class="item-card">
+      <div class="item-img" style="background:var(--red-dim);">
+        ${tx.img ? `<img src="${tx.img}" alt=""/>` : '📤'}
+      </div>
+      <div class="item-body">
+        <div class="item-name">${esc(tx.itemName)}</div>
+        <div class="item-meta">
+          <span style="color:var(--red);font-weight:600;">－${tx.qty} ${esc(tx.itemUnit)}</span>
+          <span>${tx.qtyBefore} → ${tx.qtyAfter} ${esc(tx.itemUnit)}</span>
+        </div>
+        <div class="item-tags">
+          ${tx.to ? `<span class="tag" style="color:#818cf8;border-color:rgba(99,102,241,0.2);">👤 ${esc(tx.to)}</span>` : ''}
+          ${tx.where ? `<span class="tag" style="color:var(--amber);border-color:rgba(245,158,11,0.2);">📍 ${esc(tx.where)}</span>` : ''}
+          ${tx.note ? `<span class="tag">${esc(tx.note)}</span>` : ''}
+          <span class="tag" style="font-size:10px;color:var(--text3);">${tx.time}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────────
+// ZARLAG — INDEXEDDB TX
+// ─────────────────────────────────────────────
+function dbPutTx(tx) {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('transactions', 'readwrite');
+    const req = t.objectStore('transactions').put(tx);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadTransactionsFromDB() {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('transactions', 'readonly');
+    const req = t.objectStore('transactions').getAll();
+    req.onsuccess = () => {
+      transactions = (req.result || []).sort((a,b) => b.id - a.id);
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+(async function init() {
+  await initDB();
+  await loadFromDB();
+  await loadTransactionsFromDB();
+  loadSettings();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
