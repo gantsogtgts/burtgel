@@ -1,0 +1,17 @@
+{
+  "name": "Агуулахын бүртгэл",
+  "short_name": "Агуулах",
+  "description": "Барааны бүртгэл — зураг, байршил, зориулалт",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f0f11",
+  "theme_color": "#18181b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%2318181b'/><text x='96' y='130' font-size='100' text-anchor='middle'>📦</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
