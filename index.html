@@ -97,7 +97,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 .cam-placeholder p{font-size:13px;}
 .snap-overlay{
   position:absolute;bottom:0;left:0;right:0;
-  background:linear-gradient(transparent, rgba(0,0,0,0.7));
+  background:linear-gradient(transparent, rgba(0,0,0,0.75));
   padding:20px 16px 16px;display:none;
 }
 .snap-btn{
@@ -106,6 +106,32 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
   cursor:pointer;font-family:var(--font);
   display:flex;align-items:center;justify-content:center;gap:7px;
 }
+/* Viewfinder frame */
+.viewfinder{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-56%);
+  width:72%;aspect-ratio:1/1;
+  pointer-events:none;
+}
+.viewfinder::before,.viewfinder::after,
+.vf-br::before,.vf-br::after{
+  content:'';position:absolute;width:22px;height:22px;
+  border-color:rgba(255,255,255,0.9);border-style:solid;
+}
+.viewfinder::before{top:0;left:0;border-width:2.5px 0 0 2.5px;border-radius:3px 0 0 0;}
+.viewfinder::after{top:0;right:0;border-width:2.5px 2.5px 0 0;border-radius:0 3px 0 0;}
+.vf-br::before{bottom:0;left:0;border-width:0 0 2.5px 2.5px;border-radius:0 0 0 3px;}
+.vf-br::after{bottom:0;right:0;border-width:0 2.5px 2.5px 0;border-radius:0 0 3px 0;}
+/* center crosshair */
+.vf-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:16px;height:16px;pointer-events:none;
+}
+.vf-center::before,.vf-center::after{
+  content:'';position:absolute;background:rgba(255,255,255,0.6);border-radius:1px;
+}
+.vf-center::before{width:100%;height:1.5px;top:50%;transform:translateY(-50%);}
+.vf-center::after{height:100%;width:1.5px;left:50%;transform:translateX(-50%);}
 .cam-controls{padding:12px;display:flex;gap:8px;}
 .btn{
   flex:1;padding:11px;font-size:13px;font-weight:500;
@@ -349,6 +375,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         <div class="snap-overlay" id="snapOverlay">
           <button class="snap-btn" onclick="takeSnap()">⬤ &nbsp;Зураг авах</button>
         </div>
+        <div class="viewfinder" id="vf1" style="display:none;"><div class="vf-br"></div><div class="vf-center"></div></div>
       </div>
       <canvas id="cnv" style="display:none"></canvas>
       <div class="cam-controls">
@@ -419,6 +446,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         <div class="snap-overlay" id="zSnapOverlay">
           <button class="snap-btn" onclick="zTakeSnap()">&#9899; &nbsp;Зураг авах</button>
         </div>
+        <div class="viewfinder" id="vf2" style="display:none;"><div class="vf-br"></div><div class="vf-center"></div></div>
       </div>
       <canvas id="zCnv" style="display:none"></canvas>
       <div class="cam-controls">
@@ -463,9 +491,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
           <input type="text" id="zUnit" placeholder="ш, кг..."/>
         </div>
       </div>
+      <div class="row2">
+        <div class="field">
+          <label>Хэнд өгсөн</label>
+          <input type="text" id="zTo" placeholder="жнэ: Д.Болд, 1-р баг..."/>
+        </div>
+        <div class="field">
+          <label>Хаанд ашигласан</label>
+          <input type="text" id="zWhere" placeholder="жнэ: Барилга, Цех..."/>
+        </div>
+      </div>
       <div class="field">
-        <label>Зориулалт / тэмдэглэл</label>
-        <input type="text" id="zNote" placeholder="хаанд ашигласан..."/>
+        <label>Тэмдэглэл</label>
+        <input type="text" id="zNote" placeholder="нэмэлт мэдээлэл..."/>
       </div>
       <div class="form-btns">
         <button class="btn btn-secondary" onclick="cancelZarlag()">&#10005; Цуцлах</button>
@@ -644,6 +682,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
       </div>
       <div class="setting-row">
         <div>
+          <div class="setting-label">AI Proxy URL</div>
+          <div class="setting-sub">Cloudflare Worker хаяг (CORS шийдэл)</div>
+        </div>
+      </div>
+      <div style="padding:0 0 8px;">
+        <input class="setting-input" id="proxyUrlInput" style="width:100%;" placeholder="https://inventory-proxy.ТANY_НЭР.workers.dev" oninput="saveSettings()"/>
+      </div>
+      <div class="setting-row">
+        <div>
           <div class="setting-label">Офлайн горим</div>
           <div class="setting-sub">IndexedDB — бүх өгөгдөл утсанд хадгалагдана</div>
         </div>
@@ -668,6 +715,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
+// Cloudflare Worker proxy — CORS шийдэл
+// Тохиргоо хэсэгт Worker URL оруулна
+let PROXY_URL = localStorage.getItem('proxyUrl') || '';
 let items = [];
 let stream = null;
 let currentImg = '';
@@ -754,11 +804,15 @@ async function loadFromDB() {
 function saveSettings() {
   localStorage.setItem('clientId', document.getElementById('clientIdInput').value);
   localStorage.setItem('sheetId', document.getElementById('sheetIdInput').value);
+  const pu = document.getElementById('proxyUrlInput').value.trim();
+  localStorage.setItem('proxyUrl', pu);
+  PROXY_URL = pu;
 }
 
 function loadSettings() {
   document.getElementById('clientIdInput').value = localStorage.getItem('clientId') || '';
   document.getElementById('sheetIdInput').value = localStorage.getItem('sheetId') || '';
+  document.getElementById('proxyUrlInput').value = localStorage.getItem('proxyUrl') || '';
 }
 
 function getClientId() { return (document.getElementById('clientIdInput').value || localStorage.getItem('clientId') || '').trim(); }
@@ -789,6 +843,7 @@ async function toggleCamera() {
     document.getElementById('vid').style.display = 'none';
     document.getElementById('camPlaceholder').style.display = 'block';
     document.getElementById('snapOverlay').style.display = 'none';
+    document.getElementById('vf1').style.display = 'none';
     document.getElementById('startCamBtn').textContent = '📷 Камер нээх';
     setStatus('📌 Камер хаагдлаа', 'info');
     return;
@@ -802,6 +857,7 @@ async function toggleCamera() {
     vid.style.display = 'block';
     document.getElementById('camPlaceholder').style.display = 'none';
     document.getElementById('snapOverlay').style.display = 'block';
+    document.getElementById('vf1').style.display = 'block';
     document.getElementById('startCamBtn').textContent = '■ Зогсоох';
     setStatus('✅ Камер бэлэн', 'ok');
   } catch (e) {
@@ -848,7 +904,8 @@ async function analyzeImage(dataUrl) {
   setStatus('🤖 AI шинжилж байна...', 'loading');
   const b64 = dataUrl.split(',')[1];
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const apiEndpoint = PROXY_URL || 'https://api.anthropic.com/v1/messages';
+    const r = await fetch(apiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1306,6 +1363,7 @@ async function zToggleCamera() {
     document.getElementById('zVid').style.display = 'none';
     document.getElementById('zCamPlaceholder').style.display = 'block';
     document.getElementById('zSnapOverlay').style.display = 'none';
+    document.getElementById('vf2').style.display = 'none';
     document.getElementById('zStartCamBtn').textContent = '📷 Камер нээх';
     return;
   }
@@ -1318,6 +1376,7 @@ async function zToggleCamera() {
     vid.style.display = 'block';
     document.getElementById('zCamPlaceholder').style.display = 'none';
     document.getElementById('zSnapOverlay').style.display = 'block';
+    document.getElementById('vf2').style.display = 'block';
     document.getElementById('zStartCamBtn').textContent = '■ Зогсоох';
     zSetStatus('✅ Камер бэлэн', 'ok');
   } catch (e) {
@@ -1359,7 +1418,8 @@ async function zMatchImage(dataUrl) {
   const itemList = items.map(it => `id:${it.id} нэр:"${it.name}" байршил:"${it.location||''}" үлдэгдэл:${it.qty}${it.unit}`).join('\n');
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const apiEndpoint = PROXY_URL || 'https://api.anthropic.com/v1/messages';
+    const r = await fetch(apiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1452,6 +1512,8 @@ function zSelectItem(id) {
 async function confirmZarlag() {
   if (!zSelectedItemId) { toast('❌ Бараа сонгоно уу'); return; }
   const qty = parseFloat(document.getElementById('zQty').value) || 0;
+  const zTo = document.getElementById('zTo').value.trim();
+  const zWhere = document.getElementById('zWhere').value.trim();
   const note = document.getElementById('zNote').value.trim();
   if (!qty || qty <= 0) { toast('❌ Тоо оруулна уу'); return; }
 
@@ -1478,6 +1540,8 @@ async function confirmZarlag() {
     qty: qty,
     qtyBefore: it.qty,
     qtyAfter: newQty,
+    to: zTo,
+    where: zWhere,
     note: note,
     img: zCurrentImg,
     time: new Date().toLocaleString('mn-MN')
@@ -1499,6 +1563,8 @@ function cancelZarlag() {
   zSelectedItemId = null;
   document.getElementById('zQty').value = '1';
   document.getElementById('zUnit').value = '';
+  document.getElementById('zTo').value = '';
+  document.getElementById('zWhere').value = '';
   document.getElementById('zNote').value = '';
   zSetStatus('📌 Зарлага гаргах барааны зургийг авна уу', 'info');
 }
@@ -1530,6 +1596,8 @@ function renderZarlagHistory() {
           <span>${tx.qtyBefore} → ${tx.qtyAfter} ${esc(tx.itemUnit)}</span>
         </div>
         <div class="item-tags">
+          ${tx.to ? `<span class="tag" style="color:#818cf8;border-color:rgba(99,102,241,0.2);">👤 ${esc(tx.to)}</span>` : ''}
+          ${tx.where ? `<span class="tag" style="color:var(--amber);border-color:rgba(245,158,11,0.2);">📍 ${esc(tx.where)}</span>` : ''}
           ${tx.note ? `<span class="tag">${esc(tx.note)}</span>` : ''}
           <span class="tag" style="font-size:10px;color:var(--text3);">${tx.time}</span>
         </div>
