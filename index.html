@@ -416,7 +416,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         <div class="fields">
           <div class="field">
             <label>Барааны нэр *</label>
-            <input type="text" id="iName" placeholder="нэр оруулна уу..."/>
+            <input type="text" id="iName" placeholder="нэр оруулна уу..." oninput="previewCode()"/>
+            <div id="iCodeHint" style="font-size:11px;color:var(--text3);margin-top:5px;"></div>
           </div>
         </div>
       </div>
@@ -430,9 +431,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
           <input type="text" id="iUnit" placeholder="ш, кг, л, м..."/>
         </div>
       </div>
-      <div class="field">
-        <label>Байршил</label>
-        <input type="text" id="iLocation" placeholder="жнэ: Агуулах А, 3-р тавиур..."/>
+      <div class="row2">
+        <div class="field">
+          <label>Агуулах</label>
+          <input type="text" id="iWarehouse" placeholder="жнэ: Агуулах А..."/>
+        </div>
+        <div class="field">
+          <label>Тавиур</label>
+          <input type="text" id="iShelf" placeholder="жнэ: 3-р тавиур..."/>
+        </div>
       </div>
       <div class="field">
         <label>Зориулалт / ангилал</label>
@@ -508,10 +515,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <strong style="font-size:14px;">Зарлагын түүх</strong>
+      <strong style="font-size:14px;">Гүйлгээний түүх</strong>
       <span class="badge" id="zHistoryCount" style="background:var(--red-dim);color:var(--red);">0</span>
     </div>
-    <div id="zHistoryList"><div class="empty-state" style="padding:24px;"><p>Одоогоор зарлага байхгүй</p></div></div>
+    <div class="filter-row" style="margin-bottom:10px;">
+      <button class="filter-chip active" onclick="setTxFilter('all', this)">Бүгд</button>
+      <button class="filter-chip" onclick="setTxFilter('orlog', this)">＋ Орлого</button>
+      <button class="filter-chip" onclick="setTxFilter('zarlag', this)">－ Зарлага</button>
+    </div>
+    <div id="zHistoryList"><div class="empty-state" style="padding:24px;"><p>Одоогоор гүйлгээ байхгүй</p></div></div>
 
   </div>
 
@@ -562,9 +574,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
           <input type="text" id="eUnit"/>
         </div>
       </div>
-      <div class="field">
-        <label>Байршил</label>
-        <input type="text" id="eLocation"/>
+      <div class="row2">
+        <div class="field">
+          <label>Агуулах</label>
+          <input type="text" id="eWarehouse"/>
+        </div>
+        <div class="field">
+          <label>Тавиур</label>
+          <input type="text" id="eShelf"/>
+        </div>
       </div>
       <div class="field">
         <label>Зориулалт / ангилал</label>
@@ -618,9 +636,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 
     <div class="export-card">
       <div class="export-title">☁ Google Sheets</div>
-      <div class="export-desc">Аппаас Sheets рүү шинэ бараа илгээх, эсвэл Sheets-с аппд татах.</div>
+      <div class="export-desc">Аппаас Sheets рүү шинэ бараа илгээх, эсвэл Sheets-д байгаа ч аппад алга болсон барааг сэргээх.</div>
       <button class="export-btn-big primary" id="syncBtn2" onclick="syncToGoogle()" style="margin-bottom:8px;">☁ Аппаас Sheets руу синк</button>
-      <button class="export-btn-big secondary" onclick="syncFromSheets()">⬇ Sheets-с апп руу татах</button>
+      <button class="export-btn-big secondary" onclick="syncFromSheets()">🔄 Sheets-с дутуу барааг сэргээх</button>
     </div>
 
     <div class="export-card">
@@ -695,6 +713,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
       </div>
       <div class="setting-row">
         <div>
+          <div class="setting-label">Тогтвортой хадгалалт</div>
+          <div class="setting-sub" id="persistSub">Шалгаж байна...</div>
+        </div>
+        <span class="connection-dot" id="persistDot"></span>
+      </div>
+      <div class="setting-row">
+        <div>
           <div class="setting-label" id="dbSizeLabel">Хадгалсан өгөгдөл</div>
           <div class="setting-sub" id="dbSizeSub">...</div>
         </div>
@@ -737,7 +762,7 @@ let db = null;
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
 const DB_NAME = 'inventory_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'items';
 
 // ─────────────────────────────────────────────
@@ -758,10 +783,86 @@ function initDB() {
         const tx2 = d.createObjectStore('transactions', { keyPath: 'id' });
         tx2.createIndex('itemId', 'itemId', { unique: false });
       }
+      if (!d.objectStoreNames.contains('codes')) {
+        d.createObjectStore('codes', { keyPath: 'name' }); // name = normalized (lowercase trim)
+      }
     };
     req.onsuccess = e => { db = e.target.result; resolve(db); };
     req.onerror = () => reject(req.error);
   });
+}
+
+// ─────────────────────────────────────────────
+// MATERIAL CODES (М-001, М-002...) — нэг нэр = нэг код
+// ─────────────────────────────────────────────
+function dbGetCode(normName) {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('codes', 'readonly');
+    const req = t.objectStore('codes').get(normName);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+function dbPutCode(entry) {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('codes', 'readwrite');
+    const req = t.objectStore('codes').put(entry);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+function dbCountCodes() {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('codes', 'readonly');
+    const req = t.objectStore('codes').count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+// Нэрээр код хайх (зөвхөн харах — шинээр үүсгэхгүй)
+async function peekCode(name) {
+  const norm = (name || '').trim().toLowerCase();
+  if (!norm) return null;
+  return await dbGetCode(norm);
+}
+// Нэрээр код авах: байгаа бол хуучин кодыг буцаана, байхгүй бол шинээр үүсгэнэ
+async function getOrCreateCode(name) {
+  const norm = (name || '').trim().toLowerCase();
+  if (!norm) return '';
+  const existing = await dbGetCode(norm);
+  if (existing) return existing.code;
+  const count = await dbCountCodes();
+  const code = 'M-' + String(count + 1).padStart(3, '0');
+  await dbPutCode({ name: norm, code, displayName: (name || '').trim() });
+  return code;
+}
+// Хуучин барааны код байхгүй бол нөхөн үүсгэх (migration)
+async function backfillCodes() {
+  let changed = false;
+  for (let i = 0; i < items.length; i++) {
+    if (!items[i].code) {
+      const code = await getOrCreateCode(items[i].name);
+      items[i] = { ...items[i], code };
+      await dbPut(items[i]);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+let iNameDebounce;
+function previewCode() {
+  clearTimeout(iNameDebounce);
+  iNameDebounce = setTimeout(async () => {
+    const name = document.getElementById('iName').value.trim();
+    const hint = document.getElementById('iCodeHint');
+    if (!hint) return;
+    if (!name) { hint.textContent = ''; return; }
+    const existing = await peekCode(name);
+    hint.textContent = existing
+      ? `🏷 Код: ${existing.code} (өмнө бүртгэгдсэн нэр)`
+      : '🏷 Энэ нэр шинэ — хадгалахад автоматаар код үүснэ';
+  }, 250);
 }
 
 function dbGetAll() {
@@ -952,19 +1053,12 @@ async function addItem() {
   const name = document.getElementById('iName').value.trim();
   const qty = parseFloat(document.getElementById('iQty').value) || 1;
   const unit = document.getElementById('iUnit').value.trim() || 'ш';
-  const location = document.getElementById('iLocation').value.trim();
+  const warehouse = document.getElementById('iWarehouse').value.trim();
+  const shelf = document.getElementById('iShelf').value.trim();
+  const location = [warehouse, shelf].filter(Boolean).join(' · ');
   const purpose = document.getElementById('iPurpose').value.trim();
   const note = document.getElementById('iNote').value.trim();
   if (!name) { setStatus('❌ Барааны нэр оруулна уу', 'err'); return; }
-
-  const item = {
-    id: Date.now(),
-    name, qty, unit, location, purpose, note,
-    img: currentImg,
-    driveUrl: '',
-    synced: false,
-    time: new Date().toLocaleString('mn-MN')
-  };
 
   // Ижил нэртэй бараа байвал анхааруулах
   const existing = items.find(i => i.name.toLowerCase() === name.toLowerCase());
@@ -972,8 +1066,39 @@ async function addItem() {
     if (!confirm(`"${name}" нэртэй бараа аль хэдийн байна (${existing.qty} ${existing.unit}). Шинээр нэмэх үү?`)) return;
   }
 
+  // Материалын код: ижил нэр өмнө байсан бол хуучин кодыг дахин ашиглана,
+  // шинэ нэр бол шинэ код (M-001, M-002...) автоматаар үүснэ
+  const code = await getOrCreateCode(name);
+
+  const item = {
+    id: Date.now(),
+    code, name, qty, unit, location, warehouse, shelf, purpose, note,
+    img: currentImg,
+    driveUrl: '',
+    synced: false,
+    time: new Date().toLocaleString('mn-MN')
+  };
+
   items.unshift(item);
   await dbPut(item);
+
+  // Орлогын гүйлгээ түүхэнд бүртгэх
+  const tx = {
+    id: Date.now() + 1,
+    type: 'orlog',
+    itemId: item.id,
+    itemCode: code,
+    itemName: name,
+    itemUnit: unit,
+    qty: qty,
+    qtyBefore: existing ? existing.qty : 0,
+    qtyAfter: existing ? existing.qty + qty : qty,
+    note: note,
+    img: currentImg,
+    time: item.time
+  };
+  transactions.unshift(tx);
+  await dbPutTx(tx);
 
   cancelAdd();
   // Камерыг зогсоох
@@ -993,7 +1118,8 @@ function cancelAdd() {
   document.getElementById('addForm').classList.remove('visible');
   document.getElementById('addThumb').style.display = 'none';
   currentImg = '';
-  ['iName','iQty','iUnit','iLocation','iPurpose','iNote'].forEach(id => {
+  document.getElementById('iCodeHint').textContent = '';
+  ['iName','iQty','iUnit','iWarehouse','iShelf','iPurpose','iNote'].forEach(id => {
     document.getElementById(id).value = id === 'iQty' ? '1' : '';
   });
 }
@@ -1005,7 +1131,9 @@ window.startEdit = function(id) {
   document.getElementById('eName').value = it.name;
   document.getElementById('eQty').value = it.qty;
   document.getElementById('eUnit').value = it.unit;
-  document.getElementById('eLocation').value = it.location || '';
+  // Хуучин барааны хувьд warehouse/shelf тусад нь хадгалаагүй бол байгаа location-г Агуулах талбарт байрлуулна
+  document.getElementById('eWarehouse').value = it.warehouse || it.location || '';
+  document.getElementById('eShelf').value = it.shelf || '';
   document.getElementById('ePurpose').value = it.purpose || '';
   document.getElementById('eNote').value = it.note || '';
   const et = document.getElementById('editThumb');
@@ -1019,14 +1147,16 @@ async function saveEdit() {
   const name = document.getElementById('eName').value.trim();
   const qty = parseFloat(document.getElementById('eQty').value) || 1;
   const unit = document.getElementById('eUnit').value.trim() || 'ш';
-  const location = document.getElementById('eLocation').value.trim();
+  const warehouse = document.getElementById('eWarehouse').value.trim();
+  const shelf = document.getElementById('eShelf').value.trim();
+  const location = [warehouse, shelf].filter(Boolean).join(' · ');
   const purpose = document.getElementById('ePurpose').value.trim();
   const note = document.getElementById('eNote').value.trim();
   if (!name) { toast('❌ Нэр оруулна уу'); return; }
 
   const idx = items.findIndex(i => i.id === editingId);
   if (idx > -1) {
-    items[idx] = { ...items[idx], name, qty, unit, location, purpose, note, synced: false };
+    items[idx] = { ...items[idx], name, qty, unit, location, warehouse, shelf, purpose, note, synced: false };
     await dbPut(items[idx]);
   }
   cancelEdit();
@@ -1060,7 +1190,7 @@ function setFilter(val, el) {
 }
 
 function buildFilters() {
-  const locations = [...new Set(items.map(i => i.location).filter(Boolean))];
+  const locations = [...new Set(items.map(i => i.warehouse || i.location).filter(Boolean))];
   const row = document.getElementById('filterRow');
   row.innerHTML = '<button class="filter-chip' + (activeFilter === 'all' ? ' active' : '') + '" onclick="setFilter(\'all\', this)">Бүгд</button>';
   locations.forEach(loc => {
@@ -1075,7 +1205,7 @@ function renderList() {
   const sortVal = document.querySelector('.sort-select') ? document.querySelector('.sort-select').value : 'newest';
 
   let filtered = items.filter(it => {
-    const matchFilter = activeFilter === 'all' || it.location === activeFilter;
+    const matchFilter = activeFilter === 'all' || (it.warehouse || it.location) === activeFilter;
     const matchSearch = !search || [it.name, it.location, it.purpose, it.note].some(v => (v || '').toLowerCase().includes(search));
     return matchFilter && matchSearch;
   });
@@ -1107,7 +1237,7 @@ function renderList() {
         ${it.img ? `<img src="${it.img}" alt=""/>` : '📦'}
       </div>
       <div class="item-body">
-        <div class="item-name">${esc(it.name)}</div>
+        <div class="item-name">${it.code ? `<span style="color:var(--accent);font-weight:700;margin-right:4px;">${esc(it.code)}</span>` : ''}${esc(it.name)}</div>
         <div class="item-meta">
           <span>📦 ${it.qty} ${esc(it.unit)}</span>
           ${it.location ? `<span>📍 ${esc(it.location)}</span>` : ''}
@@ -1181,17 +1311,17 @@ async function uploadImageToDrive(base64DataUrl, fileName) {
 
 async function ensureSheetHeader(sheetId) {
   const r = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:H1`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:J1`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const d = await r.json();
   if (!d.values || !d.values[0] || d.values[0][0] !== '№') {
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:H1?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:J1?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [['№','Зураг','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Огноо']] })
+        body: JSON.stringify({ values: [['№','Код','Зураг','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Огноо']] })
       }
     );
   }
@@ -1224,6 +1354,7 @@ async function syncToGoogle() {
       driveUrls[it.id] = driveUrl;
       rows.push([
         '',
+        it.code || '',
         driveUrl ? `=IMAGE("${driveUrl}")` : '',
         it.name, it.qty, it.unit,
         it.location || '', it.purpose || '', it.note || '', it.time
@@ -1234,7 +1365,7 @@ async function syncToGoogle() {
     // Бүх мөрийг 2-р мөрт нэг дор insert хийнэ (дээд талд)
     setStatus(`⏳ Sheets-д бичиж байна...`, 'loading');
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:I2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:J2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -1275,12 +1406,12 @@ async function syncToGoogle() {
 function exportXLSX() {
   if (!items.length) { toast('Бараа байхгүй'); return; }
   const wb = XLSX.utils.book_new();
-  const wsData = [['№','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Drive зургийн URL','Огноо']];
+  const wsData = [['№','Код','Барааны нэр','Тоо','Нэгж','Байршил','Зориулалт','Тэмдэглэл','Drive зургийн URL','Огноо']];
   items.forEach((it, i) => {
-    wsData.push([i+1, it.name, it.qty, it.unit, it.location||'', it.purpose||'', it.note||'', it.driveUrl||'', it.time]);
+    wsData.push([i+1, it.code||'', it.name, it.qty, it.unit, it.location||'', it.purpose||'', it.note||'', it.driveUrl||'', it.time]);
   });
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = [{wch:4},{wch:28},{wch:8},{wch:7},{wch:20},{wch:22},{wch:22},{wch:40},{wch:20}];
+  ws['!cols'] = [{wch:4},{wch:8},{wch:28},{wch:8},{wch:7},{wch:20},{wch:22},{wch:22},{wch:40},{wch:20}];
   XLSX.utils.book_append_sheet(wb, ws, 'Бараа материал');
   // Stats sheet
   const locs = [...new Set(items.map(i=>i.location).filter(Boolean))];
@@ -1300,10 +1431,10 @@ table{border-collapse:collapse;width:100%;}th{background:#1e293b;color:#fff;padd
 td{padding:9px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;vertical-align:middle;}tr:nth-child(even){background:#f1f5f9;}
 img{width:64px;height:64px;object-fit:cover;border-radius:6px;}</style></head><body>
 <h1>📦 Агуулахын бүртгэл</h1><p class="sub">${new Date().toLocaleString('mn-MN')} — Нийт ${items.length} бараа</p>
-<table><tr><th>№</th><th>Зураг</th><th>Нэр</th><th>Тоо</th><th>Нэгж</th><th>Байршил</th><th>Зориулалт</th><th>Тэмдэглэл</th></tr>`;
+<table><tr><th>№</th><th>Код</th><th>Зураг</th><th>Нэр</th><th>Тоо</th><th>Нэгж</th><th>Байршил</th><th>Зориулалт</th><th>Тэмдэглэл</th></tr>`;
   items.forEach((it, i) => {
     const imgTag = it.img ? `<img src="${it.img}" alt=""/>` : '—';
-    html += `<tr><td>${i+1}</td><td>${imgTag}</td><td><strong>${esc(it.name)}</strong></td><td>${it.qty}</td><td>${esc(it.unit)}</td><td>${esc(it.location||'')}</td><td>${esc(it.purpose||'')}</td><td>${esc(it.note||'')}</td></tr>`;
+    html += `<tr><td>${i+1}</td><td>${esc(it.code||'')}</td><td>${imgTag}</td><td><strong>${esc(it.name)}</strong></td><td>${it.qty}</td><td>${esc(it.unit)}</td><td>${esc(it.location||'')}</td><td>${esc(it.purpose||'')}</td><td>${esc(it.note||'')}</td></tr>`;
   });
   html += `</table></body></html>`;
   const a = document.createElement('a');
@@ -1428,7 +1559,7 @@ function zFilterItems() {
       background:${sel ? 'var(--accent-dim)' : outOfStock ? 'var(--red-dim)' : 'var(--surface3)'};">
       ${it.img ? `<img src="${it.img}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0;"/>` : '<div style="width:40px;height:40px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>'}
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.name)}</div>
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.code ? `<span style="color:var(--accent);">${esc(it.code)}</span> ` : ''}${esc(it.name)}</div>
         <div style="font-size:11px;color:${outOfStock ? 'var(--red)' : 'var(--text3)'};">
           ${outOfStock ? '⚠ Дууссан' : 'Үлдэгдэл: ' + it.qty + ' ' + esc(it.unit)}
           ${it.location ? ' · ' + esc(it.location) : ''}
@@ -1453,7 +1584,7 @@ function zSelectItem(id) {
   // Сонгосон барааг харуулах
   const thumb = document.getElementById('zMatchThumb');
   if (it.img) { thumb.src = it.img; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
-  document.getElementById('zMatchName').textContent = it.name;
+  document.getElementById('zMatchName').textContent = (it.code ? it.code + ' · ' : '') + it.name;
   document.getElementById('zMatchMeta').textContent = [it.location, it.purpose].filter(Boolean).join(' · ');
   const stockEl = document.getElementById('zMatchStock');
   stockEl.textContent = 'Үлдэгдэл: ' + it.qty + ' ' + it.unit;
@@ -1495,6 +1626,7 @@ async function confirmZarlag() {
     id: Date.now(),
     type: 'zarlag',
     itemId: zSelectedItemId,
+    itemCode: it.code || '',
     itemName: it.name,
     itemUnit: it.unit,
     qty: qty,
@@ -1538,32 +1670,47 @@ function zSetStatus(msg, type = 'info') {
 // ─────────────────────────────────────────────
 // ZARLAG — HISTORY
 // ─────────────────────────────────────────────
+let txFilter = 'all';
+function setTxFilter(val, el) {
+  txFilter = val;
+  document.querySelectorAll('#page-zarlag .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderZarlagHistory();
+}
+
 function renderZarlagHistory() {
-  document.getElementById('zHistoryCount').textContent = transactions.length;
-  if (!transactions.length) {
-    document.getElementById('zHistoryList').innerHTML = '<div class="empty-state" style="padding:24px;"><p>Одоогоор зарлага байхгүй</p></div>';
+  const filtered = txFilter === 'all' ? transactions : transactions.filter(t => t.type === txFilter);
+  document.getElementById('zHistoryCount').textContent = filtered.length;
+  if (!filtered.length) {
+    document.getElementById('zHistoryList').innerHTML = '<div class="empty-state" style="padding:24px;"><p>Одоогоор гүйлгээ байхгүй</p></div>';
     return;
   }
-  document.getElementById('zHistoryList').innerHTML = transactions.map(tx => `
+  document.getElementById('zHistoryList').innerHTML = filtered.map(tx => {
+    const isOrlog = tx.type === 'orlog';
+    const color = isOrlog ? 'var(--green)' : 'var(--red)';
+    const bg = isOrlog ? 'var(--green-dim)' : 'var(--red-dim)';
+    const sign = isOrlog ? '＋' : '－';
+    const emoji = isOrlog ? '📥' : '📤';
+    return `
     <div class="item-card">
-      <div class="item-img" style="background:var(--red-dim);">
-        ${tx.img ? `<img src="${tx.img}" alt=""/>` : '📤'}
+      <div class="item-img" style="background:${bg};">
+        ${tx.img ? `<img src="${tx.img}" alt=""/>` : emoji}
       </div>
       <div class="item-body">
-        <div class="item-name">${esc(tx.itemName)}</div>
+        <div class="item-name">${tx.itemCode ? `<span style="color:var(--accent);font-weight:700;margin-right:4px;">${esc(tx.itemCode)}</span>` : ''}${esc(tx.itemName)}</div>
         <div class="item-meta">
-          <span style="color:var(--red);font-weight:600;">－${tx.qty} ${esc(tx.itemUnit)}</span>
+          <span style="color:${color};font-weight:600;">${sign}${tx.qty} ${esc(tx.itemUnit)}</span>
           <span>${tx.qtyBefore} → ${tx.qtyAfter} ${esc(tx.itemUnit)}</span>
         </div>
+        <div style="font-size:11px;color:var(--text2);font-weight:500;margin-bottom:6px;">📅 ${esc(tx.time)}</div>
         <div class="item-tags">
           ${tx.to ? `<span class="tag" style="color:#818cf8;border-color:rgba(99,102,241,0.2);">👤 ${esc(tx.to)}</span>` : ''}
           ${tx.where ? `<span class="tag" style="color:var(--amber);border-color:rgba(245,158,11,0.2);">📍 ${esc(tx.where)}</span>` : ''}
           ${tx.note ? `<span class="tag">${esc(tx.note)}</span>` : ''}
-          <span class="tag" style="font-size:10px;color:var(--text3);">${tx.time}</span>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ─────────────────────────────────────────────
@@ -1622,43 +1769,59 @@ async function syncFromSheets() {
   if (!accessToken) { toast('❌ Эхлээд Google-т нэвтэрнэ үү'); switchTab('settings'); return; }
   const sheetId = getSheetId();
   if (!sheetId) { toast('❌ Spreadsheet ID оруулна уу'); switchTab('settings'); return; }
-  if (!confirm('Sheets-с татахад аппын БҮГД өгөгдөл устаж Sheets-ийн өгөгдлөөр солигдоно. Үргэлжлүүлэх үү?')) return;
+  if (!confirm('Sheets-д байгаа бараануудаас аппад дутуу байгааг сэргээнэ (одоо байгаа дата устгахгүй). Үргэлжлүүлэх үү?')) return;
 
   const btn = document.querySelector('[onclick="syncFromSheets()"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Татаж байна...'; }
 
   try {
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:I1000`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:J1000`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const d = await r.json();
     const rows = d.values || [];
     if (!rows.length) { toast('⚠ Sheets хоосон байна'); return; }
 
-    await dbClear();
-    items = [];
+    // Local-д байгаа кодуудын set — давхардуулахгүйн тулд
+    const existingCodes = new Set(items.map(i => i.code).filter(Boolean));
+    const existingNames = new Set(items.map(i => i.name.toLowerCase().trim()));
+
+    let added = 0;
     for (const row of rows) {
-      const name = (row[2] || '').trim();
+      const name = (row[3] || '').trim();
       if (!name) continue;
+      let code = (row[1] || '').trim();
+
+      // Sheets мөрөнд код байхгүй бол нэрээр код олох/үүсгэх
+      if (!code) code = await getOrCreateCode(name);
+
+      // Энэ код эсвэл нэр аль хэдийн app-д байгаа бол алгасна (одоо байгаа датаг дарахгүй)
+      if (existingCodes.has(code) || existingNames.has(name.toLowerCase())) continue;
+
       const item = {
         id: Date.now() + Math.random(),
+        code,
         name,
-        qty: parseFloat(row[3]) || 0,
-        unit: row[4] || 'ш',
-        location: row[5] || '',
-        purpose: row[6] || '',
-        note: row[7] || '',
+        qty: parseFloat(row[4]) || 0,
+        unit: row[5] || 'ш',
+        location: row[6] || '',
+        purpose: row[7] || '',
+        note: row[8] || '',
         img: '',
         driveUrl: '',
         synced: true,
-        time: row[8] || new Date().toLocaleString('mn-MN')
+        time: row[9] || new Date().toLocaleString('mn-MN')
       };
       items.push(item);
       await dbPut(item);
+      existingCodes.add(code);
+      existingNames.add(name.toLowerCase());
+      added++;
     }
+    items.sort((a, b) => b.id - a.id);
     updateUI();
-    toast('✅ Sheets-с ' + items.length + ' бараа татагдлаа');
+    toast(added ? `✅ ${added} дутуу бараа сэргээгдлээ` : '✓ Бүх бараа аль хэдийн апп-д байна');
   } catch(e) {
     toast('❌ Алдаа: ' + e.message);
   } finally {
@@ -1674,6 +1837,21 @@ async function syncFromSheets() {
   await loadFromDB();
   await loadTransactionsFromDB();
   loadSettings();
+  // Хуучин бараанд код байхгүй бол нөхөн үүсгэх
+  if (await backfillCodes()) updateUI();
+  // Browser-аас site-ийн өгөгдлийг автоматаар цэвэрлэхээс сэргийлж persistent storage хүсэх
+  // (7 хоногоор ашиглаагүй PWA-ийн IndexedDB-г Safari/Chrome устгадаг тохиолдол байдаг)
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const granted = await navigator.storage.persist();
+      const dot = document.getElementById('persistDot');
+      const sub = document.getElementById('persistSub');
+      if (dot && sub) {
+        dot.className = 'connection-dot ' + (granted ? 'ok' : 'err');
+        sub.textContent = granted ? 'Зөвшөөрөгдсөн — өгөгдөл автоматаар устгагдахгүй' : 'Зөвшөөрөгдөөгүй — тогтмол ашиглаж, хэрэглээгээ хадгалаарай';
+      }
+    } catch(e) {}
+  }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
